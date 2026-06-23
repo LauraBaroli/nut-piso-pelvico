@@ -963,5 +963,85 @@ var L=(function(){
 })();
 </script>
 <div id="L-print"></div>
+<script>
+/* ===== NUT · Auth real + persistencia (Supabase) — defensivo, fallback a demo ===== */
+(function(){
+  if(typeof sb==='undefined' || !sb){ return; }      // sin Supabase => queda el demo
+  var INP='width:100%;box-sizing:border-box;padding:12px;margin-bottom:10px;border:1px solid #2B2E34;border-radius:12px;background:#0D0E10;color:#EAEAEA;font-size:14px;font-family:inherit';
+  var BTN='width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(100deg,#FFB703,#FF8C00);color:#1a1305;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit';
+  var signup=false, clinicId=null;
+  var gate=document.createElement('div');
+  gate.id='sbgate';
+  gate.style.cssText='position:fixed;inset:0;z-index:99999;background:#0D0E10;display:flex;align-items:center;justify-content:center;padding:20px';
+  function box(inner){return '<div style="width:min(372px,100%);background:#17181B;border:1px solid #2B2E34;border-radius:18px;padding:26px 22px;color:#EAEAEA;font-family:Inter,system-ui,sans-serif">'+inner+'</div>';}
+  function gateHTML(){
+    return box('<div style="font-size:21px;font-weight:800">NUT Kinesiología</div>'
+      +'<div style="font-size:12.5px;color:#9AA0AB;margin:5px 0 18px">Seguimiento de piso pélvico · Lic. Laura Baroli</div>'
+      +(signup?'<input id="sb-name" placeholder="Nombre y apellido" style="'+INP+'">':'')
+      +'<input id="sb-email" type="email" placeholder="Email" autocomplete="username" style="'+INP+'">'
+      +'<input id="sb-pass" type="password" placeholder="Clave" autocomplete="current-password" style="'+INP+'">'
+      +'<div id="sb-err" style="display:none;color:#F3909A;font-size:12.5px;margin:0 0 8px"></div>'
+      +'<button id="sb-go" style="'+BTN+'">'+(signup?'Crear cuenta':'Ingresar')+'</button>'
+      +'<div style="text-align:center;margin-top:12px;font-size:12.5px"><span id="sb-toggle" style="color:#FFB703;cursor:pointer">'+(signup?'Ya tengo cuenta':'Crear cuenta (paciente nueva)')+'</span></div>'
+      +'<div style="text-align:center;margin-top:13px"><span id="sb-demo" style="color:#6A7280;cursor:pointer;font-size:11.5px">Ver demo sin cuenta</span></div>');
+  }
+  function err(t){var e=document.getElementById('sb-err');if(e){e.textContent=t;e.style.display='block';}}
+  function renderGate(){gate.style.display='flex';gate.innerHTML=gateHTML();
+    var g=document.getElementById('sb-go');if(g)g.onclick=submit;
+    var t=document.getElementById('sb-toggle');if(t)t.onclick=function(){signup=!signup;renderGate();};
+    var d=document.getElementById('sb-demo');if(d)d.onclick=function(){gate.style.display='none';};
+    var pw=document.getElementById('sb-pass');if(pw)pw.onkeydown=function(e){if(e.key==='Enter')submit();};
+  }
+  function serialize(p){var o={};for(var k in p){if(k!=='_id'&&k!=='_hash')o[k]=p[k];}return o;}
+  function today(){return (typeof _isoAgo==='function')?_isoAgo(0):new Date().toISOString().slice(0,10);}
+  async function submit(){
+    var email=((document.getElementById('sb-email')||{}).value||'').trim();
+    var pass=(document.getElementById('sb-pass')||{}).value||'';
+    if(!email||!pass)return err('Completá email y clave.');
+    gate.querySelector('#sb-go').textContent='...';
+    try{
+      var res=signup?await sb.auth.signUp({email:email,password:pass}):await sb.auth.signInWithPassword({email:email,password:pass});
+      if(res.error){renderGate();return err(res.error.message);}
+      if(!res.data||!res.data.session){renderGate();return err(signup?'Cuenta creada. Revisá tu email para confirmarla y volvé a entrar.':'No se pudo iniciar sesión.');}
+      await onAuth(res.data.user,(document.getElementById('sb-name')||{}).value);
+    }catch(e){renderGate();err('Error: '+e.message);}
+  }
+  function clearDB(){Object.keys(window.DB).forEach(function(k){delete window.DB[k];});}
+  function putRow(row){var st=row.state||{};var key=st.key||row.id;st.key=key;st._id=row.id;window.DB[key]=st;if(typeof recompute==='function'){try{recompute(st);}catch(e){}}return key;}
+  function freshPatient(email,name){var parts=(name||'').trim().split(' ');return {key:'p_'+Date.now(),name:(name||email),ini:(((parts[0]||'P')[0]||'P')+((parts[1]||'')[0]||'')).toUpperCase(),pathKey:'iu_esfuerzo',diags:['iu_esfuerzo'],prog:'Incontinencia de esfuerzo',progKey:null,progsub:'',max:3,lvl:1,plan:{perDay:3,days:7},startISO:today(),phase:'tratamiento',encTotal:8,encounters:[],log:[],cells:{},painW:[],symW:[],proms:[],bladder:[],inbox:[],ant:[],customAnt:[],pfm:{tono:'Normal',contr:'Normal',relaj:'Presente',fuerza:'3',endur:'5'},priv:'',shared:'',age:'',profile:{first:parts[0]||'',last:parts.slice(1).join(' '),mail:email},notes3:['N1','N2','N3'],kpis:[['0%','Adherencia 30d'],['0','Sesiones'],['N1','de 3'],['—','']]};}
+  async function seedDemo(clinic){var keys=Object.keys(window.DB);for(var i=0;i<keys.length;i++){var p=window.DB[keys[i]];p.key=keys[i];try{await sb.from('patients').insert({clinician_id:clinic,first_name:(p.profile&&p.profile.first)||(p.name||'').split(' ')[0],last_name:(p.profile&&p.profile.last)||'',email:(p.profile&&p.profile.mail)||null,state:serialize(p)});}catch(e){}}}
+  async function onAuth(user,name){
+    gate.innerHTML=box('<div style="color:#9AA0AB;font-size:13px;text-align:center">Cargando…</div>');
+    try{
+      var c=await sb.from('clinicians').select('id').eq('auth_id',user.id).maybeSingle();
+      if(c.data){ clinicId=c.data.id;
+        var pr=await sb.from('patients').select('id,state').eq('clinician_id',clinicId);
+        if(!pr.error&&(!pr.data||pr.data.length===0)){ await seedDemo(clinicId); pr=await sb.from('patients').select('id,state').eq('clinician_id',clinicId); }
+        clearDB(); (pr.data||[]).forEach(putRow);
+        if(typeof setView==='function')setView('clinic'); hideToggle(); addLogout();
+        try{L.go('dash');}catch(e){}
+        startAutosave(); gate.style.display='none'; return;
+      }
+      var pq=await sb.from('patients').select('id,state').eq('auth_id',user.id).maybeSingle();
+      if(pq.data){ clearDB(); var k=putRow(pq.data); window.ME=k; finishPatient(false); return; }
+      // paciente nueva
+      var cl=await sb.from('clinicians').select('id').limit(1).maybeSingle();
+      var parts=(name||'').trim().split(' ');
+      var fr=freshPatient(user.email,name);
+      var np=await sb.from('patients').insert({auth_id:user.id,clinician_id:cl.data?cl.data.id:null,email:user.email,first_name:parts[0]||'',last_name:parts.slice(1).join(' '),state:serialize(fr)}).select('id,state').maybeSingle();
+      if(np.error){renderGate();return err(np.error.message);}
+      clearDB(); var k2=putRow(np.data); window.ME=k2; finishPatient(true);
+    }catch(e){renderGate();err('Error cargando: '+e.message);}
+  }
+  function finishPatient(isNew){if(typeof setView==='function')setView('patient');hideToggle();addLogout();try{D.go(isNew?'first':'home');}catch(e){}startAutosave();gate.style.display='none';}
+  function hideToggle(){var sw=document.querySelector('.switch');if(sw)sw.style.display='none';}
+  function addLogout(){if(document.getElementById('sb-logout'))return;var b=document.createElement('button');b.id='sb-logout';b.textContent='Salir';b.style.cssText='position:fixed;top:10px;right:12px;z-index:9998;background:#1F2126;border:1px solid #2B2E34;color:#9AA0AB;border-radius:9px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit';b.onclick=async function(){try{await flush();await sb.auth.signOut();}catch(e){}location.reload();};document.body.appendChild(b);}
+  var _saving=false;
+  async function flush(){if(_saving||!window.DB)return;_saving=true;try{var keys=Object.keys(window.DB);for(var i=0;i<keys.length;i++){var p=window.DB[keys[i]];if(!p||!p._id)continue;var st=serialize(p);var h=JSON.stringify(st);if(p._hash===h)continue;p._hash=h;try{await sb.from('patients').update({state:st}).eq('id',p._id);}catch(e){}}}finally{_saving=false;}}
+  function startAutosave(){setInterval(function(){flush();},6000);document.addEventListener('visibilitychange',function(){if(document.hidden)flush();});window.addEventListener('beforeunload',function(){flush();});}
+  document.body.appendChild(gate);
+  (async function boot(){try{var ses=await sb.auth.getSession();if(ses.data&&ses.data.session){await onAuth(ses.data.session.user,'');}else{renderGate();}}catch(e){renderGate();}})();
+})();
+</script>
 </body>
 </html>
