@@ -22,6 +22,7 @@
 
   /* ============ PATIENT (#pd) ============ */
   #pd{--bg:#0D0E10;--surf:#1F2126;--surf2:#17181B;--line:#2B2E34;--hair:#23262C;--txt:#EAEAEA;--txt2:#9AA0AB;--txt3:#6A7280;--coral:#FFB703;--coral2:#FF8C00;--mint:#FF8C00;--green:#FFB703;--amber:#FF8C00;--red:#E63946}
+  #pd{display:flex;flex-direction:column;align-items:center;width:100%}
   #pd .phone{width:min(420px,100%);height:min(880px,94vh);background:var(--bg);border-radius:42px;border:1px solid #2B2E34;box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden;display:flex;flex-direction:column;color:var(--txt)}
   @media(max-width:480px){body{padding:0!important}#pd .phone{width:100%;height:100vh;height:100dvh;border-radius:0;border:none;box-shadow:none;padding-top:env(safe-area-inset-top,0)}#pd .glowtop{display:none}}
   #pd .glowtop{position:absolute;top:-130px;left:50%;transform:translateX(-50%);width:340px;height:260px;background:radial-gradient(circle,rgba(255,140,0,.16),rgba(255,140,0,0) 70%);pointer-events:none}
