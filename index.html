@@ -1022,16 +1022,7 @@ var L=(function(){
     try{
       var res=await sb.auth.signInWithPassword({email:email,password:pass});
       if(!res.error&&res.data&&res.data.session){await onAuth(res.data.user);return;}
-      // login falló: ¿es una activación válida (usuario+clave transitoria que cargó Laura)?
-      var chk=await sb.rpc('check_temp',{uname:email,t:pass});
-      if(!(chk&&chk.data===true)){renderGate();return err('Usuario o clave incorrectos. Si la olvidaste, tocá «Olvidé mi clave».');}
-      var su=await sb.auth.signUp({email:email,password:pass});
-      if(su.error){renderGate();return err(su.error.message);}
-      if(!su.data||!su.data.session){renderGate();return err('Falta apagar «Confirm email» en Supabase para activar el alta. Avisale a Mariano.');}
-      var cl=await sb.rpc('claim_patient');
-      if(cl.error){renderGate();return err('No pude activar la cuenta: '+cl.error.message);}
-      if(!cl.data){try{await sb.auth.signOut();}catch(e){}renderGate();return err('Ese usuario no está registrado. Pedile el alta a Laura.');}
-      await onAuth(su.data.user);
+      renderGate();return err('Usuario o clave incorrectos. Si la olvidaste, tocá «Olvidé mi clave».');
     }catch(e){renderGate();err('Error: '+e.message);}
   }
   function clearDB(){Object.keys(window.DB).forEach(function(k){delete window.DB[k];});}
@@ -1078,7 +1069,7 @@ var L=(function(){
   var _saving=false;
   async function flush(){if(_saving||!window.DB)return;_saving=true;try{var keys=Object.keys(window.DB);for(var i=0;i<keys.length;i++){var p=window.DB[keys[i]];if(!p||!p._id)continue;var st=serialize(p);var h=JSON.stringify(st);if(p._hash===h)continue;p._hash=h;try{await sb.from('patients').update({state:st}).eq('id',p._id);}catch(e){}}}finally{_saving=false;}}
   function startAutosave(){setInterval(function(){flush();},6000);document.addEventListener('visibilitychange',function(){if(document.hidden)flush();});window.addEventListener('beforeunload',function(){flush();});}
-  window.__sbInsertPatient=async function(key){try{if(typeof sb==='undefined'||!sb||!window.__SB_CLINIC)return null;var p=window.DB[key];if(!p)return null;p.key=key;var baseU=(p.username||((p.name||'paciente').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'.').replace(/(^\.|\.$)/g,'')))||'paciente';var uname=baseU;for(var attempt=0;attempt<6;attempt++){p.username=uname;var lemail=loginEmail(uname);var ins={clinician_id:window.__SB_CLINIC,first_name:(p.profile&&p.profile.first)||(p.name||'').split(' ')[0],last_name:(p.profile&&p.profile.last)||(p.name||'').split(' ').slice(1).join(' '),email:lemail,username:uname,state:serialize(p)};if(p._tempPw){ins.temp_pw=p._tempPw;}var r=await sb.from('patients').insert(ins).select('id').maybeSingle();if(r&&!r.error&&r.data){p._id=r.data.id;p._email=lemail;p._hash=JSON.stringify(serialize(p));return {username:uname,tempPw:p._tempPw};}if(r&&r.error&&/(duplicate|unique|already)/i.test(r.error.message||'')){uname=baseU.replace(/[0-9]+$/,'')+(attempt+2);continue;}return {error:(r&&r.error&&r.error.message)||'No se pudo guardar'};}return {error:'No pude generar un usuario único'};}catch(e){return {error:e.message};}};
+  window.__sbInsertPatient=async function(key){try{if(typeof sb==='undefined'||!sb||!window.__SB_CLINIC)return null;var p=window.DB[key];if(!p)return null;p.key=key;var baseU=(p.username||((p.name||'paciente').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'.').replace(/(^\.|\.$)/g,'')))||'paciente';var uname=baseU;for(var attempt=0;attempt<6;attempt++){p.username=uname;var lemail=loginEmail(uname);var ins={clinician_id:window.__SB_CLINIC,first_name:(p.profile&&p.profile.first)||(p.name||'').split(' ')[0],last_name:(p.profile&&p.profile.last)||(p.name||'').split(' ').slice(1).join(' '),email:lemail,username:uname,state:serialize(p)};if(p._tempPw){ins.temp_pw=p._tempPw;}var r=await sb.from('patients').insert(ins).select('id').maybeSingle();if(r&&!r.error&&r.data){p._id=r.data.id;p._email=lemail;p._hash=JSON.stringify(serialize(p));var lg=await sb.rpc('clinician_create_login',{pid:p._id});if(lg&&lg.error){return {error:'No pude crear el acceso de la paciente: '+lg.error.message};}return {username:uname,tempPw:p._tempPw};}if(r&&r.error&&/(duplicate|unique|already)/i.test(r.error.message||'')){uname=baseU.replace(/[0-9]+$/,'')+(attempt+2);continue;}return {error:(r&&r.error&&r.error.message)||'No se pudo guardar'};}return {error:'No pude generar un usuario único'};}catch(e){return {error:e.message};}};
   document.body.appendChild(gate);
   (async function boot(){try{var ses=await sb.auth.getSession();if(ses.data&&ses.data.session){await onAuth(ses.data.session.user,'');}else{renderGate();}}catch(e){renderGate();}})();
 })();
