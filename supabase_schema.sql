@@ -287,3 +287,52 @@ insert into pathologies(key,name,category) values
  ('constipacion','Constipación / disinergia','coordinacion'),
  ('diastasis','Diástasis abdominal','fortalecimiento')
 on conflict (key) do nothing;
+
+
+-- ============================================================
+-- Actualización v3 — sincroniza el esquema con lo que usa index.html
+-- La app guarda el estado de cada paciente en un blob JSON (patients.state)
+-- y usa columnas de acceso (username/email/clave transitoria/blanqueo).
+-- Ejecutá este bloque una sola vez sobre el esquema anterior.
+-- ============================================================
+
+alter table patients add column if not exists state                jsonb  default '{}'::jsonb;
+alter table patients add column if not exists must_change           boolean default true;   -- fuerza cambio de clave en el 1er ingreso
+alter table patients add column if not exists temp_pw               text;                   -- clave transitoria (se limpia al cambiarla)
+alter table patients add column if not exists pw_reset_requested    boolean default false;  -- la paciente pidió blanqueo
+alter table patients add column if not exists dni                   text;                   -- para el blanqueo por DNI
+create index if not exists idx_patients_dni on patients (dni);
+
+-- ------------------------------------------------------------
+-- RPC 1: la paciente pide blanqueo con su DNI.
+-- SECURITY DEFINER + respuesta uniforme (void): nunca revela si el DNI existe.
+-- ------------------------------------------------------------
+create or replace function request_pw_reset(dni text)
+  returns void
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+begin
+  update patients set pw_reset_requested = true
+   where patients.dni = request_pw_reset.dni;
+  -- No devolvemos nada: exista o no el DNI, la respuesta es idéntica (anti-enumeración).
+end;
+$$;
+revoke all on function request_pw_reset(text) from public;
+grant execute on function request_pw_reset(text) to anon, authenticated;
+
+-- ------------------------------------------------------------
+-- RPC 2 y 3: crear el login de una paciente y blanquear su clave.
+-- Crear/actualizar usuarios en auth.users NO se puede hacer desde SQL con la
+-- anon key: requiere la Admin API de Supabase Auth (service_role). Implementalas
+-- como *Edge Functions* con el service_role, verificando que quien llama sea la
+-- kinesióloga dueña de la paciente. Firmas esperadas por la app:
+--
+--   clinician_create_login(pid uuid)              -> crea el usuario auth de la paciente
+--                                                    (email = username@pacientes..., temp_pw)
+--   clinician_reset_patient_pw(pid uuid, newpw text) -> setea una clave nueva y must_change=true
+--
+-- Referencia: https://supabase.com/docs/guides/functions +
+--             supabase.auth.admin.createUser / updateUserById
+-- ------------------------------------------------------------

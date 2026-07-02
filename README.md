@@ -11,31 +11,44 @@ Dos roles en una misma app:
 
 ## Arquitectura
 
-- **Front**: una sola página HTML/CSS/JS (`index.html`), sin build, instalable como PWA.
+- **Front**: HTML + CSS + JS sin build, instalable como **PWA** (funciona offline el "cascarón" de la app; los datos siempre van a la red).
 - **Backend**: **Supabase** (Postgres + Auth + RLS). Cada paciente ve solo sus datos; Laura ve y gestiona a sus pacientes.
-- **Hosting**: GitHub Pages (estático) usando el cliente JS de Supabase por CDN.
+- **Hosting**: GitHub Pages (estático) + cliente JS de Supabase por CDN.
 
 ```
-Paciente / Laura  ──►  index.html (GitHub Pages)  ──►  Supabase (Auth + Postgres con RLS)
+Paciente / Laura ──► index.html (GitHub Pages) ──► Supabase (Auth + Postgres con RLS)
 ```
 
-## Archivos
+### Estructura de archivos
 
 | Archivo | Qué es |
 |---|---|
-| `index.html` | La aplicación completa (renombrar desde `app_nut.html`). |
-| `supabase_schema.sql` | Esquema de la base + Row Level Security + seed de catálogos. |
-| `README.md` | Este documento. |
+| `index.html` | Documento principal: markup + carga de estilos y scripts. |
+| `css/styles.css` | Todos los estilos. |
+| `js/config.js` | URL y clave pública de Supabase + init del cliente. |
+| `js/core.js` | Utilidades compartidas: `esc()` (escape anti-XSS), modal, toast, accesibilidad por teclado. |
+| `js/data.js` | Datos clínicos: programas, tips, antecedentes. |
+| `js/engine.js` | Motor clínico: adherencia, alertas, fases, PROMs, evidencia. |
+| `js/patient.js` | App de la paciente (módulo `D`). |
+| `js/clinic.js` | Panel de Laura (módulo `L`). |
+| `js/auth.js` | Login real contra Supabase + persistencia (autosave). |
+| `js/pwa.js` | Registro del Service Worker. |
+| `manifest.webmanifest` | Metadatos de la PWA (nombre, iconos, colores). |
+| `sw.js` | Service Worker (cachea el cascarón; nunca cachea datos de salud). |
+| `icons/` | Iconos de la app (192, 512, maskable). |
+| `supabase_schema.sql` | Esquema de la base + RLS + seed + **actualización v3** (columnas y RPC que usa la app). |
+
+> Antes todo vivía en un único `index.html` de ~265 KB. Ahora está separado por responsabilidad: más fácil de leer, mantener y revisar. Como GitHub Pages sirve archivos estáticos, no hace falta ningún paso de build.
 
 ---
 
 ## Puesta en marcha
 
 ### 1. Supabase
-1. Crear un proyecto en [supabase.com](https://supabase.com) (o dejá que lo cree el asistente con el conector).
-2. En **SQL Editor**, pegar y ejecutar `supabase_schema.sql`. Crea las tablas, las políticas RLS y carga las 9 patologías.
-3. En **Authentication → Providers**, habilitar **Email** (clave). (Opcional: desactivar "Confirm email" para altas internas.)
-4. Crear el usuario de Laura (Authentication → Users) e insertar su fila de clínica:
+1. Crear un proyecto en [supabase.com](https://supabase.com).
+2. En **SQL Editor**, pegar y ejecutar `supabase_schema.sql` (incluye la actualización v3 al final).
+3. En **Authentication → Providers**, habilitar **Email**. (Opcional: desactivar "Confirm email" para altas internas.)
+4. Crear el usuario de Laura (Authentication → Users) e insertar su fila:
    ```sql
    insert into clinicians (auth_id, name, license)
    values ('<auth_uid_de_laura>', 'Lic. Laura Baroli', 'M.N 13.433');
@@ -43,38 +56,35 @@ Paciente / Laura  ──►  index.html (GitHub Pages)  ──►  Supabase (Aut
 5. Copiar de **Project Settings → API**: `Project URL` y `anon public key`.
 
 ### 2. Configurar la app
-En `index.html`, completar el bloque de configuración con tu `Project URL` y tu `anon key`:
+En `js/config.js`, completar con tus valores:
 ```js
-const SUPABASE_URL = "https://TUPROYECTO.supabase.co";
-const SUPABASE_ANON_KEY = "TU_ANON_KEY";
+var SB_URL = "https://TUPROYECTO.supabase.co";
+var SB_KEY = "TU_ANON_KEY";
 ```
-> La integración de datos (lectura/escritura contra Supabase) se está cableando entidad por entidad; mientras tanto la app corre con datos de demo en memoria.
+> La `anon key` es pública por diseño (va en el cliente). **Toda la seguridad real la dan las políticas RLS**: revisá que estén activas antes de cargar datos reales de pacientes.
 
-### 3. GitHub + hosting
+### 3. Funciones de acceso (blanqueo / alta de logins)
+La app llama tres RPC:
+- `request_pw_reset(dni)` — incluida en el `.sql` (respuesta uniforme, no revela si el DNI existe).
+- `clinician_create_login(pid)` y `clinician_reset_patient_pw(pid, newpw)` — crean/actualizan usuarios de Auth y **requieren la Admin API** (service_role); implementalas como **Edge Functions**. Ver la nota en el `.sql`.
+
+### 4. GitHub + hosting
 ```bash
-git init
 git add .
-git commit -m "NUT Piso Pélvico — primera versión"
-git branch -M main
-git remote add origin https://github.com/<tu-usuario>/nut-piso-pelvico.git
-git push -u origin main
+git commit -m "NUT Piso Pélvico — versión curada"
+git push
 ```
-Luego en **Settings → Pages**: Source = `main` / root. Queda publicada en
-`https://<tu-usuario>.github.io/nut-piso-pelvico/`.
+En **Settings → Pages**: Source = `main` / root. Queda en `https://<usuario>.github.io/nut-piso-pelvico/`.
 
 ---
 
-## Modelo de datos (resumen)
+## Seguridad y privacidad (datos de salud)
 
-`clinicians`, `patients` (perfil + datos clínicos), `patient_diagnoses` (uno o varios), `patient_antecedents` (catálogo o a medida), `evaluations` (piso pélvico ICS 2021), `session_logs` (matriz día×entrenamiento → adherencia), `encounters`, `questionnaire_results` (ICIQ, POP‑SS, Wexner…), `bladder_diary`, `diary_entries`, `messages`, y `programs` / `program_levels` / `program_blocks` (default + a medida). Todo con RLS.
-
-## Hoja de ruta de migración
-
-1. ✅ Esquema + RLS (`supabase_schema.sql`).
-2. ⏳ Crear proyecto + aplicar esquema + datos de demo.
-3. ⏳ Auth real (Laura super‑usuaria; pacientes que ella da de alta).
-4. ⏳ Persistencia: reemplazar el estado en memoria por Supabase, entidad por entidad.
-5. ⏳ GitHub Pages.
+- **Login obligatorio**: no hay modo demo abierto. Si el backend no responde, la app muestra un aviso y **nunca** el contenido.
+- **Anti-XSS**: todo texto de paciente/clínica se escapa con `esc()` antes de mostrarse (evita que una nota del diario ejecute código en la sesión de Laura).
+- **Blanqueo de clave sin filtración**: la respuesta al pedir blanqueo por DNI es siempre la misma.
+- **Claves transitorias fuertes**: generadas con `crypto.getRandomValues` (no `NUT+4 dígitos`).
+- **Errores visibles**: si el servidor rechaza guardar/borrar, la app lo informa (no simula éxito).
 
 ---
 
