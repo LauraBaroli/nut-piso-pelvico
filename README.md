@@ -78,6 +78,21 @@ En **Settings → Pages**: Source = `main` / root. Queda en `https://<usuario>.g
 
 ---
 
+## Dos accesos separados
+
+- **Pacientes** → enlace normal + usuario y clave:
+  `https://laurabaroli.github.io/nut-piso-pelvico/`
+- **Laura (panel clínico)** → enlace con el *slug* secreto:
+  `https://laurabaroli.github.io/nut-piso-pelvico/#panel-k7m2qx`
+
+El panel solo se habilita si la URL incluye el slug (definido en `js/config.js` → `PANEL_KEY`, o inline en `index.html`). Si la cuenta de Laura intenta entrar por el enlace de pacientes, la app la redirige a usar el enlace del panel. **Cambien el slug** por uno que solo Laura y ustedes conozcan.
+
+> Nota honesta: el slug vive en el JS del cliente, así que alguien que lea el código fuente podría encontrarlo. Es una barrera contra el acceso casual, no un secreto criptográfico. La protección real la dan la **clave de Laura** + las **políticas RLS** de Supabase. Para una separación fuerte de verdad haría falta ruteo/auth del lado del servidor.
+
+Desde el panel, Laura tiene **"Ver como paciente"** en la ficha para previsualizar la app tal como la ve esa paciente (sin guardar cambios).
+
+---
+
 ## Seguridad y privacidad (datos de salud)
 
 - **Login obligatorio**: no hay modo demo abierto. Si el backend no responde, la app muestra un aviso y **nunca** el contenido.
