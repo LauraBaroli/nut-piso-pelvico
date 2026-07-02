@@ -83,7 +83,7 @@ En **Settings → Pages**: Source = `main` / root. Queda en `https://<usuario>.g
 - **Pacientes** → enlace normal + usuario y clave:
   `https://laurabaroli.github.io/nut-piso-pelvico/`
 - **Laura (panel clínico)** → enlace con el *slug* secreto:
-  `https://laurabaroli.github.io/nut-piso-pelvico/#panel-k7m2qx`
+  `https://laurabaroli.github.io/nut-piso-pelvico/#Lauchita1986`
 
 El panel solo se habilita si la URL incluye el slug (definido en `js/config.js` → `PANEL_KEY`, o inline en `index.html`). Si la cuenta de Laura intenta entrar por el enlace de pacientes, la app la redirige a usar el enlace del panel. **Cambien el slug** por uno que solo Laura y ustedes conozcan.
 

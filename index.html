@@ -482,10 +482,10 @@ var SB_KEY='sb_publishable_iBIZOxpBiyNyIFC1HeBOrg_Obh4GoBv';
 
 /* ===== Acceso al PANEL CLINICO =====
    El panel de Laura SOLO se habilita si la URL incluye este "slug" secreto:
-      .../nut-piso-pelvico/#panel-k7m2qx
+      .../nut-piso-pelvico/#Lauchita1986
    Las pacientes usan el enlace normal (sin slug) con usuario y clave.
    CAMBIA este valor por uno que solo Laura y ustedes conozcan. */
-var PANEL_KEY='panel-k7m2qx';
+var PANEL_KEY='Lauchita1986';
 var sb=null,SUPA_OK=false;
 try{if(window.supabase&&window.supabase.createClient){sb=window.supabase.createClient(SB_URL,SB_KEY);}}catch(e){console.warn('[NUT] Supabase init',e);}
 if(sb){sb.from('pathologies').select('key',{head:true,count:'exact'}).then(function(res){SUPA_OK=!res.error;console.log(SUPA_OK?'[NUT] Supabase conectado \u2713':'[NUT] Supabase error: '+(res.error&&res.error.message));});}
