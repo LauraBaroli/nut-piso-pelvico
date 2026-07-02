@@ -1256,6 +1256,9 @@ var L=(function(){
         try{L.go('dash');}catch(e){}
         startAutosave(); gate.style.display='none'; return;
       }
+      // Enlace del panel: SOLO cuentas de clínica. Si la sesión activa es de una paciente,
+      // mostramos el login del panel (no su app). Cuando Laura ingresa, su sesión reemplaza a la de la paciente.
+      if(isPanelLink()){ renderGate(); return err('Ingresá con la cuenta del panel clínico.'); }
       var pq=await sb.from('patients').select('id,state,must_change').eq('auth_id',user.id).maybeSingle();
       if(pq.error){renderGate();return err('No pude cargar tu ficha: '+pq.error.message);}
       if(pq.data){ var st0=pq.data.state||{}; if(st0.disabled){try{await sb.auth.signOut();}catch(e){} renderGate(); return err('Tu acceso fue desactivado. Consultá con Laura.'); } clearDB(); var k=putRow(pq.data); window.ME=k; try{var mq=await sb.from('messages').select('body,sent_at').eq('patient_id',pq.data.id).order('sent_at',{ascending:true});if(mq&&!mq.error&&mq.data&&window.DB[k]){window.DB[k].inbox=mq.data.map(function(r){return {from:'Laura',text:r.body,date:(r.sent_at||'').slice(0,10)};});}}catch(e){} finishPatient(false); return; }
