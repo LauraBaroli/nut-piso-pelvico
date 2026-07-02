@@ -487,7 +487,7 @@ var SB_KEY='sb_publishable_iBIZOxpBiyNyIFC1HeBOrg_Obh4GoBv';
    CAMBIA este valor por uno que solo Laura y ustedes conozcan. */
 var PANEL_KEY='Lauchita1986';
 var sb=null,SUPA_OK=false;
-try{if(window.supabase&&window.supabase.createClient){sb=window.supabase.createClient(SB_URL,SB_KEY);}}catch(e){console.warn('[NUT] Supabase init',e);}
+try{if(window.supabase&&window.supabase.createClient){sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:true}});}}catch(e){console.warn('[NUT] Supabase init',e);}
 if(sb){sb.from('pathologies').select('key',{head:true,count:'exact'}).then(function(res){SUPA_OK=!res.error;console.log(SUPA_OK?'[NUT] Supabase conectado \u2713':'[NUT] Supabase error: '+(res.error&&res.error.message));});}
 
 </script>
@@ -1156,6 +1156,12 @@ var L=(function(){
   function isPanelLink(){try{var k=(typeof PANEL_KEY!=='undefined')?PANEL_KEY:'__nopanel__';return (location.hash||'').indexOf(k)>=0 || (new URLSearchParams(location.search).get('acceso')===k);}catch(e){return false;}}
   window.__isPanelLink=isPanelLink;
 
+  // Una sesión por navegador: cuando alguien inicia sesión en una pestaña,
+  // las demás pestañas de ESTE navegador se cierran (recargan al login).
+  var _bc=('BroadcastChannel' in window)?new BroadcastChannel('nut-auth'):null;
+  if(_bc){_bc.onmessage=function(ev){if(ev&&ev.data&&ev.data.type==='login'){try{sessionStorage.setItem('nut_kick','1');}catch(e){}try{if(sb&&sb.auth)sb.auth.signOut();}catch(e){}location.reload();}};}
+  function announceLogin(){if(_bc){try{_bc.postMessage({type:'login',ts:Date.now()});}catch(e){}}}
+
   // Sin backend => login obligatorio igual: mostramos aviso, nunca la app.
   if(typeof sb==='undefined' || !sb){
     var g0=document.createElement('div');
@@ -1190,6 +1196,7 @@ var L=(function(){
     var g=document.getElementById('sb-go');if(g)g.onclick=submit;
     var f=document.getElementById('sb-forgot');if(f)f.onclick=forgot;
     var pw=document.getElementById('sb-pass');if(pw)pw.onkeydown=function(e){if(e.key==='Enter')submit();};
+    try{if(sessionStorage.getItem('nut_kick')){sessionStorage.removeItem('nut_kick');info('Se cerró esta sesión porque se inició otra en este navegador. Volvé a ingresar.');}}catch(e){}
   }
   // Blanqueo de clave: overlay accesible + respuesta SIEMPRE idéntica (no revela si el DNI existe)
   function forgot(){
@@ -1231,7 +1238,7 @@ var L=(function(){
     var btn=gate.querySelector('#sb-go');if(btn)btn.textContent='…';
     try{
       var res=await sb.auth.signInWithPassword({email:email,password:pass});
-      if(!res.error&&res.data&&res.data.session){await onAuth(res.data.user);return;}
+      if(!res.error&&res.data&&res.data.session){announceLogin();await onAuth(res.data.user);return;}
       renderGate();return err('Usuario o clave incorrectos. Si la olvidaste, tocá «Olvidé mi clave».');
     }catch(e){renderGate();err('Error: '+e.message);}
   }

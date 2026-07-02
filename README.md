@@ -87,6 +87,8 @@ En **Settings → Pages**: Source = `main` / root. Queda en `https://<usuario>.g
 
 El panel solo se habilita si la URL incluye el slug (definido en `js/config.js` → `PANEL_KEY`, o inline en `index.html`). Si la cuenta de Laura intenta entrar por el enlace de pacientes, la app la redirige a usar el enlace del panel. **Cambien el slug** por uno que solo Laura y ustedes conozcan.
 
+**Todos se loguean siempre** (incluida Laura): la sesión no se guarda entre visitas (`persistSession:false`), así que cada vez hay que ingresar usuario y clave. **Una sesión por navegador**: si alguien inicia sesión en una pestaña, las demás pestañas de ese mismo navegador se cierran y vuelven al login (evita que queden dos personas logueadas a la vez en el mismo equipo). Distintos dispositivos siguen siendo independientes: muchas pacientes y Laura pueden usar la app en simultáneo sin pisarse.
+
 > Nota honesta: el slug vive en el JS del cliente, así que alguien que lea el código fuente podría encontrarlo. Es una barrera contra el acceso casual, no un secreto criptográfico. La protección real la dan la **clave de Laura** + las **políticas RLS** de Supabase. Para una separación fuerte de verdad haría falta ruteo/auth del lado del servidor.
 
 Desde el panel, Laura tiene **"Ver como paciente"** en la ficha para previsualizar la app tal como la ve esa paciente (sin guardar cambios).
